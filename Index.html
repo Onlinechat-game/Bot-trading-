@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bot PRO Precision - Hacken</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #050505; color: #fff; text-align: center; padding: 20px; margin: 0; }
+        h2 { color: #ffd700; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; font-size: 1.4rem; }
+        .subtitle { font-size: 0.8rem; color: #00e676; margin-bottom: 20px; font-weight: bold; }
+        
+        .card { background: #1a1a1a; border-radius: 15px; padding: 20px; box-shadow: 0 0 20px rgba(0, 230, 118, 0.1); max-width: 400px; margin: 0 auto; border: 1px solid #333; }
+        
+        #price-display { font-size: 1.3rem; font-weight: bold; margin: 10px 0; color: #4fc3f7; font-family: monospace; }
+        
+        #signal-box {
+            margin: 20px 0;
+            padding: 25px;
+            border-radius: 12px;
+            font-size: 1.5rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+            min-height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1.2;
+        }
+        
+        .buy { background: linear-gradient(135deg, rgba(0, 200, 83, 0.2), rgba(0, 200, 83, 0.05)); color: #00e676; border-color: #00e676; box-shadow: 0 0 25px rgba(0, 230, 118, 0.4); animation: pulseGreen 2s infinite; }
+        .sell { background: linear-gradient(135deg, rgba(255, 61, 0, 0.2), rgba(255, 61, 0, 0.05)); color: #ff5252; border-color: #ff5252; box-shadow: 0 0 25px rgba(255, 82, 82, 0.4); animation: pulseRed 2s infinite; }
+        .wait { background-color: #252525; color: #777; border-color: #444; }
+        
+        @keyframes pulseGreen { 0% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.4); } 70% { box-shadow: 0 0 0 15px rgba(0, 230, 118, 0); } 100% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0); } }
+        @keyframes pulseRed { 0% { box-shadow: 0 0 0 0 rgba(255, 82, 82, 0.4); } 70% { box-shadow: 0 0 0 15px rgba(255, 82, 82, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 82, 82, 0); } }
+
+        button {
+            background: linear-gradient(90deg, #2962ff, #00b0ff);
+            color: white; border: none; padding: 18px; width: 100%;
+            font-size: 1.1rem; font-weight: bold; border-radius: 10px;
+            cursor: pointer; text-transform: uppercase; letter-spacing: 1px;
+            box-shadow: 0 4px 15px rgba(41, 98, 255, 0.4);
+            transition: transform 0.1s;
+        }
+        button:active { transform: scale(0.96); }
+        button:disabled { background: #333; color: #555; cursor: not-allowed; box-shadow: none; }
+
+        .details { margin-top: 15px; font-size: 0.75rem; color: #888; text-align: left; background: #111; padding: 10px; border-radius: 8px; }
+        .detail-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
+        .val-good { color: #00e676; }
+        .val-bad { color: #ff5252; }
+
+        .note { font-size: 0.7rem; color: #555; margin-top: 20px; line-height: 1.4; border-top: 1px solid #333; padding-top: 10px; }
+        
+        .creator-signature {
+            margin-top: 25px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            color: #ffd700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            opacity: 0.9;
+            border-top: 1px dashed #444;
+            padding-top: 15px;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+        }
+        .creator-signature span { color: #fff; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>🤖 Bot PRO Precision</h2>
+        <div class="subtitle">Stratégie Triple Confirmation (ADX+RSI+EMA)</div>
+        
+        <div>Prix Actuel: <span id="price-display">...</span></div>
+        
+        <div id="signal-box" class="wait">EN ATTENTE</div>
+        
+        <button id="btn-analyze" onclick="lancerAnalyse()">LANCER L'ANALYSE PRO</button>
+        
+        <div class="details" id="tech-details" style="display:none;">
+            <!-- Les détails techniques s'afficheront ici -->
+        </div>
+
+        <div class="note">
+            ⚠️ <strong>Haute Précision :</strong> Le bot filtre les marchés faibles.<br>
+            Si "ATTENDRE", c'est que les 3 conditions ne sont pas réunies.<br>
+            Expiration : <strong>30 Minutes</strong>.
+        </div>
+
+        <div class="creator-signature">
+            Creator <span>Hacken STORE</span>
+        </div>
+    </div>
+
+    <script>
+        // API Binance EUR/USDT 15min
+        const API_URL = 'https://api.binance.com/api/v3/klines?symbol=EURUSDT&interval=15m&limit=60';
+
+        async function getMarketData() {
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) throw new Error("Erreur Réseau");
+                const data = await response.json();
+                const closes = data.map(k => parseFloat(k[4]));
+                const highs = data.map(k => parseFloat(k[2]));
+                const lows = data.map(k => parseFloat(k[3]));
+                const currentPrice = closes[closes.length - 1];
+                return { closes, highs, lows, currentPrice };
+            } catch (error) {
+                console.error(error);
+                return null;
+            }
+        }
+
+        // Calcul RSI
+        function calculateRSI(prices, period = 14) {
+            if (prices.length < period + 1) return 50;
+            let gains = 0, losses = 0;
+            for (let i = prices.length - period - 1; i < prices.length - 1; i++) {
+                const diff = prices[i+1] - prices[i];
+                if (diff >= 0) gains += diff;
+                else losses -= diff;
+            }
+            let avgGain = gains / period;
+            let avgLoss = losses / period;
+            if (avgLoss === 0) return 100;
+            const rs = avgGain / avgLoss;
+            return 100 - (100 / (1 + rs));
+        }
+
+        // Calcul EMA
+        function calculateEMA(prices, period) {
+            const k = 2 / (period + 1);
+            let ema = prices[0];
+            for (let i = 1; i < prices.length; i++) {
+                ema = prices[i] * k + ema * (1 - k);
+            }
+            return ema;
+        }
+
+        // Calcul ADX (Average Directional Index) - Pour mesurer la FORCE de la tendance
+        function calculateADX(highs, lows, closes, period = 14) {
+            if (closes.length < period * 2) return 0;
+            
+            let plusDM = 0, minusDM = 0, trSum = 0;
+            let prevHigh = highs[closes.length - period - 1];
+            let prevLow = lows[closes.length - period - 1];
+            let prevClose = closes[closes.length - period - 1];
+
+            // Calcul simplifié sur la période récente pour la démo
+            // Note: Un calcul ADX complet est complexe, ici on fait une approximation de la force
+            // en comparant la variation moyenne absolue vs la range moyenne.
+            
+            let trueRanges = [];
+            let plusDMSum = 0;
+            let minusDMSum = 0;
+
+            for(let i = closes.length - period; i < closes.length; i++) {
+                let high = highs[i];
+                let low = lows[i];
+                let close = closes[i];
+                let prevH = highs[i-1];
+                let prevL = lows[i-1];
+
+                let tr = Math.max(high - low, Math.abs(high - close), Math.abs(low - close));
+                trueRanges.push(tr);
+
+                let plusDM = high - prevH > prevL - low ? Math.max(0, high - prevH) : 0;
+                let minusDM = prevL - low > high - prevH ? Math.max(0, prevL - low) : 0;
+
+                plusDMSum += plusDM;
+                minusDMSum += minusDM;
+            }
+
+            let avgTR = trueRanges.reduce((a,b)=>a+b,0) / period;
+            let avgPlusDM = plusDMSum / period;
+            let avgMinusDM = minusDMSum / period;
+
+            let plusDI = (avgPlusDM / avgTR) * 100;
+            let minusDI = (avgMinusDM / avgTR) * 100;
+            
+            let dx = Math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100;
+            
+            // Approximation ADX simple pour ce script léger
+            return dx; 
+        }
+
+        async function lancerAnalyse() {
+            const btn = document.getElementById('btn-analyze');
+            const signalBox = document.getElementById('signal-box');
+            const priceDisplay = document.getElementById('price-display');
+            const detailsDiv = document.getElementById('tech-details');
+
+            btn.disabled = true;
+            btn.innerText = "ANALYSE EN COURS...";
+            signalBox.className = "wait";
+            signalBox.innerText = "CALCUL DES INDICATEURS...";
+            detailsDiv.style.display = 'none';
+
+            await new Promise(r => setTimeout(r, 800));
+
+            const data = await getMarketData();
+            
+            if (!data) {
+                signalBox.innerText = "ERREUR CONNEXION";
+                btn.disabled = false;
+                btn.innerText = "RÉESSAYER";
+                return;
+            }
+
+            priceDisplay.innerText = data.currentPrice.toFixed(5);
+
+            // --- STRATÉGIE PRO TRIPLE CONFIRMATION ---
+            const emaFast = calculateEMA(data.closes, 9);
+            const emaSlow = calculateEMA(data.closes, 21);
+            const emaTrend = calculateEMA(data.closes, 50); // Tendance de fond
+            
+            const rsi = calculateRSI(data.closes, 14);
+            const adx = calculateADX(data.highs, data.lows, data.closes, 14);
+            
+            const lastClose = data.closes[data.closes.length - 1];
+
+            let signal = "ATTENDRE ⚪";
+            let type = "wait";
+            let reason = "";
+            let confidence = "";
+
+            // LOGIQUE STRICTE
+            // 1. ACHAT : Prix > EMA50 (Tendance Haussière) + RSI < 60 (Pas encore trop haut) + ADX > 20 (Tendance forte)
+            if (lastClose > emaTrend && rsi < 60 && adx > 20) {
+                if (emaFast > emaSlow) {
+                    signal = "ACHETER (CALL) 🟢";
+                    type = "buy";
+                    reason = "Tendance Forte + Momentum";
+                    confidence = "Élevée";
+                } else if (rsi < 40) {
+                     // Rebond dans la tendance haussière
+                    signal = "ACHETER (CALL) 🟢";
+                    type = "buy";
+                    reason = "Rebond sur Tendance Haussière";
+                    confidence = "Moyenne";
+                }
+            }
+
+            // 2. VENTE : Prix < EMA50 (Tendance Baissière) + RSI > 40 (Pas encore trop bas) + ADX > 20
+            if (signal === "ATTENDRE ⚪") {
+                if (lastClose < emaTrend && rsi > 40 && adx > 20) {
+                    if (emaFast < emaSlow) {
+                        signal = "VENDRE (PUT) 🔴";
+                        type = "sell";
+                        reason = "Tendance Forte + Momentum";
+                        confidence = "Élevée";
+                    } else if (rsi > 60) {
+                        signal = "VENDRE (PUT) 🔴";
+                        type = "sell";
+                        reason = "Rebond sur Tendance Baissière";
+                        confidence = "Moyenne";
+                    }
+                }
+            }
+
+            // Affichage des détails techniques pour ta compréhension
+            detailsDiv.innerHTML = `
+                <div class="detail-row"><span>Tendance (EMA50):</span> <span class="${lastClose > emaTrend ? 'val-good' : 'val-bad'}">${lastClose > emaTrend ? 'HAUSSIÈRE' : 'BAISSIÈRE'}</span></div>
+                <div class="detail-row"><span>Force (ADX):</span> <span class="${adx > 20 ? 'val-good' : 'val-bad'}">${adx.toFixed(1)} ${adx > 20 ? '(Forte)' : '(Faible)'}</span></div>
+                <div class="detail-row"><span>RSI:</span> <span>${rsi.toFixed(1)}</span></div>
+                ${confidence ? `<div class="detail-row" style="color:#ffd700; margin-top:5px; border-top:1px solid #333; padding-top:5px;"><span>Confiance:</span> <span>${confidence}</span></div>` : ''}
+            `;
+            detailsDiv.style.display = 'block';
+
+            signalBox.innerText = signal;
+            signalBox.className = type;
+            
+            if (type !== "wait") {
+                // Petit effet vibratoire si supporté
+                if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+            }
+
+            btn.disabled = false;
+            btn.innerText = "NOUVELLE ANALYSE";
+        }
+    </script>
+</body>
+</html>
