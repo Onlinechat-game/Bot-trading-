@@ -20,7 +20,7 @@
         body {
             background-color: var(--bg-color);
             color: var(--text-main);
-            font-family: 'Courier New', Courier, monospace; /* Style Terminal Pro */
+            font-family: 'Courier New', Courier, monospace;
             margin: 0;
             padding: 10px;
             font-size: 12px;
@@ -70,7 +70,7 @@
             box-shadow: 0 0 15px var(--accent);
         }
         .pred-title { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
-        .pred-value { font-size: 24px; font-weight: bold; margin: 5px 0; }
+        .pred-value { font-size: 24px; font-weight: bold; margin: 5px 0; min-height: 30px;}
         .pred-target { font-size: 11px; color: var(--text-dim); display: flex; justify-content: space-between; }
         .bull-text { color: var(--bull); }
         .bear-text { color: var(--bear); }
@@ -87,6 +87,10 @@
             border: 1px solid #1e293b;
             border-radius: 6px;
             padding: 10px;
+            min-height: 50px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
         .card h4 { margin: 0 0 5px 0; font-size: 10px; color: var(--text-dim); text-transform: uppercase; }
         .card .val { font-size: 16px; font-weight: bold; font-family: monospace; }
@@ -106,16 +110,33 @@
         .data-table tr:last-child td { border-bottom: none; }
         .dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
 
-        /* GRAPHIQUE */
-        .chart-container {
+        /* GRAPHIQUE - CORRECTION CRITIQUE */
+        .chart-wrapper {
             position: relative;
-            height: 220px;
             width: 100%;
+            height: 250px; /* Hauteur fixe garantie */
             background: var(--card-bg);
             border: 1px solid #1e293b;
             border-radius: 6px;
-            padding: 5px;
             margin-bottom: 15px;
+            overflow: hidden;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            padding: 5px;
+            box-sizing: border-box;
+        }
+        #loadingText {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: var(--text-dim);
+            font-size: 12px;
+            z-index: 10;
+            pointer-events: none;
         }
 
         /* CONSOLE LOG */
@@ -142,6 +163,7 @@
             color: var(--text-dim);
             border-top: 1px solid #1e293b;
             padding-top: 10px;
+            padding-bottom: 20px;
         }
         .hacken-signature {
             color: var(--accent);
@@ -152,11 +174,9 @@
             display: block;
         }
 
-        /* ANIMATIONS */
         @keyframes blink { 50% { opacity: 0; } }
         .blink { animation: blink 1s step-end infinite; }
         
-        /* SCROLLBAR */
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: #0f141f; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
@@ -241,9 +261,12 @@
         </tbody>
     </table>
 
-    <!-- GRAPHIQUE -->
-    <div class="chart-container">
-        <canvas id="proChart"></canvas>
+    <!-- GRAPHIQUE CORRIGÉ -->
+    <div class="chart-wrapper">
+        <div id="loadingText">INITIALISATION DU MOTEUR GRAPHIQUE...</div>
+        <div class="chart-container">
+            <canvas id="proChart"></canvas>
+        </div>
     </div>
 
     <!-- CONSOLE LOG -->
@@ -259,18 +282,16 @@
 
     <script>
         // --- CONFIGURATION PRO ---
-        const UPDATE_INTERVAL = 100; // 0.1 seconde (100ms)
+        const UPDATE_INTERVAL = 100; // 0.1 seconde
         let lastPrice = 2035.50;
-        let trendBias = 0; // -1 to 1
+        let trendBias = 0; 
         let volatility = 0.3;
         
-        // Historiques pour les calculs techniques
         let priceHistory = [];
         let rsiHistory = [];
         let macdHistory = [];
         const MAX_POINTS = 50;
 
-        // Initialisation des données
         for(let i=0; i<MAX_POINTS; i++) {
             let p = lastPrice + (Math.random() * 2 - 1);
             priceHistory.push(p);
@@ -280,19 +301,13 @@
 
         let chartInstance = null;
 
-        // --- MOTEUR DE SIMULATION DE MARCHÉ ---
         function simulateMarketTick() {
-            // Changement de tendance aléatoire mais fluide (Random Walk avec inertie)
             if(Math.random() > 0.95) trendBias = (Math.random() * 2 - 1) * 0.5;
-            
-            // Calcul du nouveau prix
             let change = (Math.random() * volatility * 2 - volatility) + (trendBias * 0.1);
             lastPrice += change;
-            
             return lastPrice;
         }
 
-        // --- CALCULATEURS TECHNIQUES ---
         function calculateRSI(data, period = 14) {
             if (data.length < period + 1) return 50;
             let gains = 0, losses = 0;
@@ -326,22 +341,18 @@
             };
         }
 
-        // --- LOGIQUE DE PRÉDICTION H+1 ---
         function predictNextHour(currentPrice, rsi, trendBias, bb) {
             let direction = "NEUTRE";
             let target = currentPrice;
             let probability = 50;
             let reasons = [];
 
-            // Facteur 1: Momentum RSI
             if (rsi > 60) { direction = "HAUSSIER"; probability += 15; reasons.push("RSI Momentum Fort"); }
             else if (rsi < 40) { direction = "BAISSIER"; probability += 15; reasons.push("RSI Faiblesse"); }
 
-            // Facteur 2: Position dans les Bandes de Bollinger
             if (currentPrice < bb.lower) { direction = "HAUSSIER (Rebond)"; probability += 20; reasons.push("Touché Bande Inférieure"); }
             else if (currentPrice > bb.upper) { direction = "BAISSIER (Rejet)"; probability += 20; reasons.push("Touché Bande Supérieure"); }
 
-            // Facteur 3: Biais de tendance global
             if (trendBias > 0.2) { 
                 if(direction === "NEUTRE") direction = "HAUSSIER"; 
                 probability += 10; 
@@ -352,9 +363,7 @@
                 reasons.push("Tendance de fond négative");
             }
 
-            // Calcul de la cible (Simulation de mouvement sur 1h)
             let expectedMove = volatility * 60 * Math.abs(trendBias || 0.1) * (direction.includes("HAUSSIER") ? 1 : -1);
-            // Ajout d'un facteur aléatoire contrôlé
             expectedMove += (Math.random() * 2 - 1); 
             
             target = currentPrice + expectedMove;
@@ -364,38 +373,34 @@
             return { direction, target, probability, reasons };
         }
 
-        // --- FONCTION PRINCIPALE D'ANALYSE ---
         function runProAnalysis() {
             const now = new Date();
-            const timeLabel = now.getHours() + ":" + String(now.getMinutes()).padStart(2, '0') + ":" + String(now.getSeconds()).padStart(2, '0') + "." + String(now.getMilliseconds()).padStart(3, '0');
+            const timeLabel = now.getHours() + ":" + String(now.getMinutes()).padStart(2, '0') + ":" + String(now.getSeconds()).padStart(2, '0');
 
-            // 1. Mise à jour Prix
             const currentPrice = simulateMarketTick();
             priceHistory.push(currentPrice);
             if(priceHistory.length > MAX_POINTS) priceHistory.shift();
 
-            // 2. Calcul Indicateurs
             const rsi = calculateRSI(priceHistory);
             const mm20 = calculateSMA(priceHistory, 20);
             const bb = calculateBollinger(priceHistory, 20, 2);
-            const macdVal = (rsi - 50) * 0.05; // Simulation simplifiée MACD basée sur RSI pour la démo
+            const macdVal = (rsi - 50) * 0.05;
             
             rsiHistory.push(rsi);
             macdHistory.push(macdVal);
             if(rsiHistory.length > MAX_POINTS) rsiHistory.shift();
             if(macdHistory.length > MAX_POINTS) macdHistory.shift();
 
-            // 3. Prédiction
             const prediction = predictNextHour(currentPrice, rsi, trendBias, bb);
 
-            // 4. Mise à jour DOM (Interface)
+            // Mise à jour DOM
             document.getElementById('priceDisplay').innerText = currentPrice.toFixed(2);
             document.getElementById('priceDisplay').style.color = currentPrice > priceHistory[priceHistory.length-2] ? '#00ff9d' : '#ff0055';
             
             document.getElementById('rsiDisplay').innerText = rsi.toFixed(1);
             document.getElementById('rsiDisplay').style.color = rsi > 70 ? '#ff0055' : (rsi < 30 ? '#00ff9d' : '#fff');
 
-            document.getElementById('stochDisplay').innerText = (rsi * 0.8 + 10).toFixed(1); // Simulé
+            document.getElementById('stochDisplay').innerText = (rsi * 0.8 + 10).toFixed(1);
             document.getElementById('macdDisplay').innerText = macdVal.toFixed(4);
             document.getElementById('macdDisplay').style.color = macdVal > 0 ? '#00ff9d' : '#ff0055';
 
@@ -408,12 +413,10 @@
             document.getElementById('tbl-bb').innerText = bb.width.toFixed(2);
             document.getElementById('sig-bb').innerText = currentPrice > bb.upper ? "SURACHAT" : (currentPrice < bb.lower ? "SURVENTE" : "NORMAL");
             
-            // Simulation News/Vol
             const volStatus = Math.random() > 0.7 ? "ÉLEVÉ" : "MOYEN";
             document.getElementById('tbl-vol').innerText = volStatus;
             document.getElementById('sig-vol').innerText = volStatus === "ÉLEVÉ" ? "ATTENTION" : "OK";
 
-            // 5. Affichage Prédiction Principale
             const signalEl = document.getElementById('mainSignal');
             signalEl.innerText = prediction.direction;
             signalEl.className = "pred-value " + (prediction.direction.includes("HAUSSIER") ? "bull-text" : (prediction.direction.includes("BAISSIER") ? "bear-text" : ""));
@@ -423,16 +426,13 @@
             document.getElementById('probability').style.color = prediction.probability > 70 ? "#00ff9d" : "#ffaa00";
             
             document.getElementById('algoReason').innerText = "Facteurs: " + prediction.reasons.join(", ");
-
             document.getElementById('trendDisplay').innerText = trendBias > 0 ? "HAUSSIER 📈" : "BAISSIER 📉";
             document.getElementById('trendDisplay').style.color = trendBias > 0 ? "#00ff9d" : "#ff0055";
 
-            // 6. Console Log (Seulement si changement majeur pour ne pas spammer)
             if(Math.random() > 0.9) {
                 addLog(`[${timeLabel}] Analyse vectorielle mise à jour. RSI: ${rsi.toFixed(1)}`);
             }
 
-            // 7. Mise à jour Graphique
             updateChart(timeLabel);
         }
 
@@ -446,8 +446,13 @@
         }
 
         function updateChart(label) {
+            const ctx = document.getElementById('proChart').getContext('2d');
+            
+            // Cacher le texte de chargement dès la première mise à jour
+            const loadingText = document.getElementById('loadingText');
+            if(loadingText) loadingText.style.display = 'none';
+
             if (!chartInstance) {
-                const ctx = document.getElementById('proChart').getContext('2d');
                 Chart.defaults.color = '#64748b';
                 Chart.defaults.borderColor = '#1e293b';
                 
@@ -468,7 +473,7 @@
                             },
                             {
                                 label: 'MM20',
-                                data: Array(MAX_POINTS).fill(0), // Sera mis à jour
+                                data: Array(MAX_POINTS).fill(0),
                                 borderColor: '#ffaa00',
                                 borderWidth: 1,
                                 borderDash: [4, 4],
@@ -478,8 +483,8 @@
                     },
                     options: {
                         responsive: true,
-                        maintainAspectRatio: false,
-                        animation: false, // Crucial pour 0.1s
+                        maintainAspectRatio: false, // Important pour remplir le conteneur
+                        animation: false,
                         interaction: { intersect: false, mode: 'index' },
                         plugins: { legend: { display: false }, tooltip: { enabled: true } },
                         scales: {
@@ -489,9 +494,7 @@
                     }
                 });
             } else {
-                // Mise à jour rapide des données
                 chartInstance.data.datasets[0].data = priceHistory;
-                // Calcul simple MM20 pour le graph
                 let mm20Data = [];
                 for(let i=0; i<priceHistory.length; i++) {
                     if(i < 20) mm20Data.push(priceHistory[i]);
@@ -506,14 +509,15 @@
             }
         }
 
-        // --- DÉMARRAGE ---
         window.onload = function() {
             addLog("> Noyau HackenStore PRO initialisé.");
             addLog("> Fréquence d'analyse: 10Hz (0.1s)");
             addLog("> Chargement des algorithmes de prédiction H+1...");
             
-            // Boucle ultra-rapide
-            setInterval(runProAnalysis, UPDATE_INTERVAL);
+            // Petit délai pour s'assurer que le DOM est bien rendu avant de dessiner le graph
+            setTimeout(() => {
+                setInterval(runProAnalysis, UPDATE_INTERVAL);
+            }, 500);
         };
 
     </script>
